@@ -7,12 +7,14 @@
 
 import { readFileSync, writeFileSync, existsSync } from "node:fs";
 import { resolve, dirname } from "node:path";
+import { fileURLToPath } from "node:url";
 
 // ---------------------------------------------------------------------------
 // Helpers
 // ---------------------------------------------------------------------------
 
-const ROOT = resolve(dirname(import.meta.url.replace("file:///", "")), "..");
+const __filename = fileURLToPath(import.meta.url);
+const ROOT = resolve(dirname(__filename), "..");
 const CLIENT_MD = resolve(ROOT, "CLIENT.md");
 const OUTPUT = resolve(ROOT, "src/config/client.config.ts");
 
@@ -108,7 +110,16 @@ function patchStaticFiles(
 
 function main() {
   if (!existsSync(CLIENT_MD)) {
+    if (existsSync(OUTPUT)) {
+      console.warn(
+        "⚠ CLIENT.md introuvable — client.config.ts existant conserve (skip generation)."
+      );
+      return;
+    }
     console.error("Erreur : CLIENT.md introuvable a la racine du projet.");
+    console.error(
+      "Creez CLIENT.md a partir du template ou assurez-vous qu'il est inclus dans le repo."
+    );
     process.exit(1);
   }
 
