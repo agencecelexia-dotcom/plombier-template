@@ -4,7 +4,7 @@
   "private": true,
   "scripts": {
     "dev": "next dev",
-    "build": "next build",
+    "build": "npm run sync-client && next build",
     "start": "next start",
     "lint": "eslint",
     "sync-client": "npx tsx scripts/sync-client.ts"
