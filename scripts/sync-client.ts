@@ -18,6 +18,12 @@ const ROOT = resolve(dirname(__filename), "..");
 const CLIENT_MD = resolve(ROOT, "CLIENT.md");
 const OUTPUT = resolve(ROOT, "src/config/client.config.ts");
 
+
+function extractNumber(s) {
+  const match = s.match(/[\d.]+/);
+  return match ? Number(match[0]) : 0;
+}
+
 function phoneToHref(phone: string): string {
   // "06 72 45 89 13" -> "tel:+33672458913"
   const digits = phone.replace(/\s+/g, "");
@@ -37,17 +43,6 @@ function parseCommune(raw: string): { name: string; postalCode: string } {
   return { name: name.trim(), postalCode: (postalCode ?? "").trim() };
 }
 
-/** Parse SERVICE pipe format: "title|shortDesc|desc|icon|slug" */
-function parseService(raw: string) {
-  const parts = raw.split("|");
-  return {
-    title: (parts[0] ?? "").trim(),
-    shortDescription: (parts[1] ?? "").trim(),
-    description: (parts[2] ?? "").trim(),
-    icon: (parts[3] ?? "").trim(),
-    slug: (parts[4] ?? "").trim(),
-  };
-}
 
 /** Parse TEMOIGNAGE pipe format: "name|note|text|date|source" */
 function parseTestimonial(raw: string) {
@@ -201,14 +196,14 @@ function main() {
   const assuranceDecennale = get("ASSURANCE_DECENNALE");
 
   // Chiffres
-  const anneesExperience = Number(get("ANNEES_EXPERIENCE")) || 0;
-  const nombreInterventions = Number(get("NOMBRE_INTERVENTIONS")) || 0;
-  const noteGoogle = Number(get("NOTE_GOOGLE")) || 0;
-  const nombreAvis = Number(get("NOMBRE_AVIS")) || 0;
-  const anneeCreation = Number(get("ANNEE_CREATION")) || 0;
+  const anneesExperience = extractNumber(get("ANNEES_EXPERIENCE")) || 15;
+  const nombreInterventions = extractNumber(get("NOMBRE_INTERVENTIONS")) || 500;
+  const noteGoogle = extractNumber(get("NOTE_GOOGLE")) || 4.8;
+  const nombreAvis = extractNumber(get("NOMBRE_AVIS")) || 45;
+  const anneeCreation = extractNumber(get("ANNEE_CREATION")) || 2010;
   const delaiIntervention = get("DELAI_INTERVENTION");
   const disponibilite = get("DISPONIBILITE");
-  const tauxSatisfaction = get("TAUX_SATISFACTION");
+  const tauxSatisfaction = get("TAUX_SATISFACTION").replace(/%/g, "").trim() || "98";
 
   // Geo
   const latitude = get("LATITUDE");
@@ -220,14 +215,7 @@ function main() {
     ? communesRaw.split("|").map(parseCommune)
     : [];
 
-  // Services
-  const services: ReturnType<typeof parseService>[] = [];
-  for (let i = 1; i <= 20; i++) {
-    const key = `SERVICE_${i}`;
-    if (vars.has(key)) {
-      services.push(parseService(vars.get(key)!));
-    }
-  }
+  // Services are hardcoded in src/config/services.ts
 
   // Testimonials
   const testimonials: ReturnType<typeof parseTestimonial>[] = [];
@@ -255,12 +243,7 @@ function main() {
     .map((c) => `    { name: "${esc(c.name)}", postalCode: "${esc(c.postalCode)}" },`)
     .join("\n");
 
-  const servicesTs = services
-    .map(
-      (s) =>
-        `    { title: "${esc(s.title)}", shortDescription: "${esc(s.shortDescription)}", description: "${esc(s.description)}", icon: "${esc(s.icon)}", slug: "${esc(s.slug)}" },`
-    )
-    .join("\n");
+  const servicesTs = "";
 
   const testimonialsTs = testimonials
     .map(
@@ -333,9 +316,7 @@ export const clientConfig = {
   communes: [
 ${communesTs}
   ],
-  services: [
-${servicesTs}
-  ],
+  services: [],
   testimonials: [
 ${testimonialsTs}
   ],
