@@ -18,33 +18,28 @@ const ROOT = resolve(dirname(__filename), "..");
 const CLIENT_MD = resolve(ROOT, "CLIENT.md");
 const OUTPUT = resolve(ROOT, "src/config/client.config.ts");
 
-
-function extractNumber(s) {
+function extractNumber(s: string): number {
   const match = s.match(/[\d.]+/);
   return match ? Number(match[0]) : 0;
 }
 
 function phoneToHref(phone: string): string {
-  // "06 72 45 89 13" -> "tel:+33672458913"
   const digits = phone.replace(/\s+/g, "");
   if (digits.startsWith("0")) {
-    return `tel:+33${digits.slice(1)}`;
+    return "tel:+33" + digits.slice(1);
   }
-  return `tel:${digits}`;
+  return "tel:" + digits;
 }
 
 function urlFromDomaine(domaine: string): string {
-  return `https://www.${domaine}`;
+  return "https://www." + domaine;
 }
 
-/** Parse "Lyon:69001-69009" -> { name, postalCode } */
 function parseCommune(raw: string): { name: string; postalCode: string } {
   const [name, postalCode] = raw.split(":");
   return { name: name.trim(), postalCode: (postalCode ?? "").trim() };
 }
 
-
-/** Parse TEMOIGNAGE pipe format: "name|note|text|date|source" */
 function parseTestimonial(raw: string) {
   const parts = raw.split("|");
   return {
@@ -56,7 +51,6 @@ function parseTestimonial(raw: string) {
   };
 }
 
-/** Numbers that should be parsed as actual numbers */
 const NUMBER_KEYS = new Set([
   "ANNEES_EXPERIENCE",
   "NOMBRE_INTERVENTIONS",
@@ -65,7 +59,6 @@ const NUMBER_KEYS = new Set([
   "ANNEE_CREATION",
 ]);
 
-/** Replace template placeholders in static source files */
 function patchStaticFiles(
   root: string,
   replacements: Record<string, string>
@@ -94,62 +87,50 @@ function patchStaticFiles(
 
     if (changed) {
       writeFileSync(filePath, content, "utf-8");
-      console.log(`\u2713 ${rel} patche`);
+      console.log("\u2713 " + rel + " patche");
     }
   }
 }
 
 // ---------------------------------------------------------------------------
-// Main
+// Escape helper for generated TS strings
 // ---------------------------------------------------------------------------
 
-function main() {
-  if (!existsSync(CLIENT_MD)) {
-    console.warn("CLIENT.md introuvable - build avec config par defaut.");
-    const lines = [];
-    lines.push('// Auto-generated default config (CLIENT.md not yet available)');
-    lines.push('export const clientConfig = {');
-    lines.push('  identity: { prenomDirigeant: "", nomDirigeant: "", nomEntreprise: "Mon Entreprise", nomLegal: "", genreDirigeant: "M", founder: "" },');
-    lines.push('  contact: { telephone: "", telephoneHref: "", telephoneUrgence: "", email: "", adresse: "", ville: "", codePostal: "", departement: "", region: "", zoneIntervention: "", zoneKm: "" },');
-    lines.push('  horaires: { semaine: "", samedi: "", dimanche: "", urgence: "" },');
-    lines.push('  branding: { couleurPrimaireHue: "210", couleurAccentHue: "30" },');
-    lines.push('  social: { facebook: "", instagram: "", google: "" },');
-    lines.push('  domaine: "", url: "",');
-    lines.push('  legal: { siret: "", rge: "", assuranceDecennale: "" },');
-    lines.push('  chiffres: { anneesExperience: 0, nombreInterventions: 0, noteGoogle: 0, nombreAvis: 0, anneeCreation: 0, delaiIntervention: "", disponibilite: "", tauxSatisfaction: "" },');
-    lines.push('  geo: { latitude: "", longitude: "" },');
-    lines.push('  communes: [], services: [], testimonials: [],');
-    lines.push('  admin: { password: "" },');
-    lines.push('  seo: { metaTitleAccueil: "", metaDescAccueil: "", descriptionEntreprise: "", slogan: "" },');
-    lines.push('} as const;');
-    lines.push('export type ClientConfig = typeof clientConfig;');
-    writeFileSync(OUTPUT, lines.join("
-"), "utf-8");
-    console.log("client.config.ts genere avec valeurs par defaut -> " + OUTPUT);
-    process.exit(0);
-  }
+function esc(s: string): string {
+  return s.replace(/\\/g, "\\\\").replace(/"/g, '\\"');
+}
 
-  const content = readFileSync(CLIENT_MD, "utf-8");
-  const lines = content.split(/\r?\n/);
+// ---------------------------------------------------------------------------
+// Generate default config when CLIENT.md is missing
+// ---------------------------------------------------------------------------
 
-  const vars = new Map<string, string>();
+function generateDefaultConfig(): string {
+  const L: string[] = [];
+  L.push("// Auto-generated default config (CLIENT.md not yet available)");
+  L.push("export const clientConfig = {");
+  L.push('  identity: { prenomDirigeant: "", nomDirigeant: "", nomEntreprise: "Mon Entreprise", nomLegal: "", genreDirigeant: "M", founder: "" },');
+  L.push('  contact: { telephone: "", telephoneHref: "", telephoneUrgence: "", email: "", adresse: "", ville: "", codePostal: "", departement: "", region: "", zoneIntervention: "", zoneKm: "" },');
+  L.push('  horaires: { semaine: "", samedi: "", dimanche: "", urgence: "" },');
+  L.push('  branding: { couleurPrimaireHue: "210", couleurAccentHue: "30" },');
+  L.push('  social: { facebook: "", instagram: "", google: "" },');
+  L.push('  domaine: "", url: "",');
+  L.push('  legal: { siret: "", rge: "", assuranceDecennale: "" },');
+  L.push('  chiffres: { anneesExperience: 0, nombreInterventions: 0, noteGoogle: 0, nombreAvis: 0, anneeCreation: 0, delaiIntervention: "", disponibilite: "", tauxSatisfaction: "" },');
+  L.push('  geo: { latitude: "", longitude: "" },');
+  L.push("  communes: [], services: [], testimonials: [],");
+  L.push('  admin: { password: "" },');
+  L.push('  seo: { metaTitleAccueil: "", metaDescAccueil: "", descriptionEntreprise: "", slogan: "" },');
+  L.push("} as const;");
+  L.push("export type ClientConfig = typeof clientConfig;");
+  L.push("");
+  return L.join("\n");
+}
 
-  for (const line of lines) {
-    const trimmed = line.trim();
-    // Skip empty, comments, section headers
-    if (!trimmed || trimmed.startsWith("#")) continue;
+// ---------------------------------------------------------------------------
+// Generate full config from parsed CLIENT.md variables
+// ---------------------------------------------------------------------------
 
-    // Match KEY: "value"
-    const match = trimmed.match(/^([A-Z_0-9]+):\s*"(.*)"$/);
-    if (match) {
-      vars.set(match[1], match[2]);
-    }
-  }
-
-  console.log(`\u2713 CLIENT.md lu (${vars.size} variables)`);
-
-  // --- Collect parsed values -----------------------------------------------
-
+function generateConfig(vars: Map<string, string>): string {
   const get = (key: string) => vars.get(key) ?? "";
 
   // Identity
@@ -158,7 +139,7 @@ function main() {
   const nomEntreprise = get("NOM_ENTREPRISE");
   const nomLegal = get("NOM_LEGAL");
   const genreDirigeant = get("GENRE_DIRIGEANT");
-  const founder = `${prenomDirigeant} ${nomDirigeant}`.trim();
+  const founder = (prenomDirigeant + " " + nomDirigeant).trim();
 
   // Contact
   const telephone = get("TELEPHONE");
@@ -215,12 +196,10 @@ function main() {
     ? communesRaw.split("|").map(parseCommune)
     : [];
 
-  // Services are hardcoded in src/config/services.ts
-
   // Testimonials
   const testimonials: ReturnType<typeof parseTestimonial>[] = [];
   for (let i = 1; i <= 50; i++) {
-    const key = `TEMOIGNAGE_${i}`;
+    const key = "TEMOIGNAGE_" + i;
     if (vars.has(key)) {
       testimonials.push(parseTestimonial(vars.get(key)!));
     }
@@ -235,117 +214,173 @@ function main() {
   const descriptionEntreprise = get("DESCRIPTION_ENTREPRISE");
   const slogan = get("SLOGAN");
 
-  // --- Generate TypeScript --------------------------------------------------
+  // --- Build output using lines.push (avoids template literal issues) ------
 
-  const esc = (s: string) => s.replace(/\\/g, "\\\\").replace(/"/g, '\\"');
+  const L: string[] = [];
+  L.push("// \u26a0\ufe0f FICHIER AUTO-G\u00c9N\u00c9R\u00c9 \u2014 ne pas modifier manuellement");
+  L.push("// Modifie CLIENT.md puis relance : npm run sync-client");
+  L.push("");
+  L.push("export const clientConfig = {");
 
-  const communesTs = communes
-    .map((c) => `    { name: "${esc(c.name)}", postalCode: "${esc(c.postalCode)}" },`)
-    .join("\n");
+  // Identity
+  L.push("  identity: {");
+  L.push('    prenomDirigeant: "' + esc(prenomDirigeant) + '",');
+  L.push('    nomDirigeant: "' + esc(nomDirigeant) + '",');
+  L.push('    nomEntreprise: "' + esc(nomEntreprise) + '",');
+  L.push('    nomLegal: "' + esc(nomLegal) + '",');
+  L.push('    genreDirigeant: "' + esc(genreDirigeant) + '",');
+  L.push('    founder: "' + esc(founder) + '",');
+  L.push("  },");
 
-  const servicesTs = "";
+  // Contact
+  L.push("  contact: {");
+  L.push('    telephone: "' + esc(telephone) + '",');
+  L.push('    telephoneHref: "' + esc(telephoneHref) + '",');
+  L.push('    telephoneUrgence: "' + esc(telephoneUrgence) + '",');
+  L.push('    email: "' + esc(email) + '",');
+  L.push('    adresse: "' + esc(adresse) + '",');
+  L.push('    ville: "' + esc(ville) + '",');
+  L.push('    codePostal: "' + esc(codePostal) + '",');
+  L.push('    departement: "' + esc(departement) + '",');
+  L.push('    region: "' + esc(region) + '",');
+  L.push('    zoneIntervention: "' + esc(zoneIntervention) + '",');
+  L.push('    zoneKm: "' + esc(zoneKm) + '",');
+  L.push("  },");
 
-  const testimonialsTs = testimonials
-    .map(
-      (t) =>
-        `    { name: "${esc(t.name)}", rating: ${t.rating}, text: "${esc(t.text)}", date: "${esc(t.date)}", source: "${esc(t.source)}" },`
-    )
-    .join("\n");
+  // Horaires
+  L.push("  horaires: {");
+  L.push('    semaine: "' + esc(horairesSemaine) + '",');
+  L.push('    samedi: "' + esc(horairesSamedi) + '",');
+  L.push('    dimanche: "' + esc(horairesDimanche) + '",');
+  L.push('    urgence: "' + esc(horairesUrgence) + '",');
+  L.push("  },");
 
-  const output = `// \u26a0\ufe0f FICHIER AUTO-G\u00c9N\u00c9R\u00c9 \u2014 ne pas modifier manuellement
-// Modifie CLIENT.md puis relance : npm run sync-client
+  // Branding
+  L.push("  branding: {");
+  L.push('    couleurPrimaireHue: "' + esc(couleurPrimaireHue) + '",');
+  L.push('    couleurAccentHue: "' + esc(couleurAccentHue) + '",');
+  L.push("  },");
 
-export const clientConfig = {
-  identity: {
-    prenomDirigeant: "${esc(prenomDirigeant)}",
-    nomDirigeant: "${esc(nomDirigeant)}",
-    nomEntreprise: "${esc(nomEntreprise)}",
-    nomLegal: "${esc(nomLegal)}",
-    genreDirigeant: "${esc(genreDirigeant)}",
-    founder: "${esc(founder)}",
-  },
-  contact: {
-    telephone: "${esc(telephone)}",
-    telephoneHref: "${esc(telephoneHref)}",
-    telephoneUrgence: "${esc(telephoneUrgence)}",
-    email: "${esc(email)}",
-    adresse: "${esc(adresse)}",
-    ville: "${esc(ville)}",
-    codePostal: "${esc(codePostal)}",
-    departement: "${esc(departement)}",
-    region: "${esc(region)}",
-    zoneIntervention: "${esc(zoneIntervention)}",
-    zoneKm: "${esc(zoneKm)}",
-  },
-  horaires: {
-    semaine: "${esc(horairesSemaine)}",
-    samedi: "${esc(horairesSamedi)}",
-    dimanche: "${esc(horairesDimanche)}",
-    urgence: "${esc(horairesUrgence)}",
-  },
-  branding: {
-    couleurPrimaireHue: "${esc(couleurPrimaireHue)}",
-    couleurAccentHue: "${esc(couleurAccentHue)}",
-  },
-  social: {
-    facebook: "${esc(facebookUrl)}",
-    instagram: "${esc(instagramUrl)}",
-    google: "${esc(googleUrl)}",
-  },
-  domaine: "${esc(domaine)}",
-  url: "${esc(url)}",
-  legal: {
-    siret: "${esc(siret)}",
-    rge: "${esc(rge)}",
-    assuranceDecennale: "${esc(assuranceDecennale)}",
-  },
-  chiffres: {
-    anneesExperience: ${anneesExperience},
-    nombreInterventions: ${nombreInterventions},
-    noteGoogle: ${noteGoogle},
-    nombreAvis: ${nombreAvis},
-    anneeCreation: ${anneeCreation},
-    delaiIntervention: "${esc(delaiIntervention)}",
-    disponibilite: "${esc(disponibilite)}",
-    tauxSatisfaction: "${esc(tauxSatisfaction)}",
-  },
-  geo: {
-    latitude: "${esc(latitude)}",
-    longitude: "${esc(longitude)}",
-  },
-  communes: [
-${communesTs}
-  ],
-  services: [],
-  testimonials: [
-${testimonialsTs}
-  ],
-  admin: {
-    password: "${esc(adminPassword)}",
-  },
-  seo: {
-    metaTitleAccueil: "${esc(metaTitleAccueil)}",
-    metaDescAccueil: "${esc(metaDescAccueil)}",
-    descriptionEntreprise: "${esc(descriptionEntreprise)}",
-    slogan: "${esc(slogan)}",
-  },
-} as const;
+  // Social
+  L.push("  social: {");
+  L.push('    facebook: "' + esc(facebookUrl) + '",');
+  L.push('    instagram: "' + esc(instagramUrl) + '",');
+  L.push('    google: "' + esc(googleUrl) + '",');
+  L.push("  },");
 
-export type ClientConfig = typeof clientConfig;
-`;
+  // Domain
+  L.push('  domaine: "' + esc(domaine) + '",');
+  L.push('  url: "' + esc(url) + '",');
 
+  // Legal
+  L.push("  legal: {");
+  L.push('    siret: "' + esc(siret) + '",');
+  L.push('    rge: "' + esc(rge) + '",');
+  L.push('    assuranceDecennale: "' + esc(assuranceDecennale) + '",');
+  L.push("  },");
+
+  // Chiffres
+  L.push("  chiffres: {");
+  L.push("    anneesExperience: " + anneesExperience + ",");
+  L.push("    nombreInterventions: " + nombreInterventions + ",");
+  L.push("    noteGoogle: " + noteGoogle + ",");
+  L.push("    nombreAvis: " + nombreAvis + ",");
+  L.push("    anneeCreation: " + anneeCreation + ",");
+  L.push('    delaiIntervention: "' + esc(delaiIntervention) + '",');
+  L.push('    disponibilite: "' + esc(disponibilite) + '",');
+  L.push('    tauxSatisfaction: "' + esc(tauxSatisfaction) + '",');
+  L.push("  },");
+
+  // Geo
+  L.push("  geo: {");
+  L.push('    latitude: "' + esc(latitude) + '",');
+  L.push('    longitude: "' + esc(longitude) + '",');
+  L.push("  },");
+
+  // Communes
+  L.push("  communes: [");
+  for (const c of communes) {
+    L.push('    { name: "' + esc(c.name) + '", postalCode: "' + esc(c.postalCode) + '" },');
+  }
+  L.push("  ],");
+
+  // Services - hardcoded in src/config/services.ts, empty here
+  L.push("  services: [],");
+
+  // Testimonials
+  L.push("  testimonials: [");
+  for (const t of testimonials) {
+    L.push('    { name: "' + esc(t.name) + '", rating: ' + t.rating + ', text: "' + esc(t.text) + '", date: "' + esc(t.date) + '", source: "' + esc(t.source) + '" },');
+  }
+  L.push("  ],");
+
+  // Admin
+  L.push("  admin: {");
+  L.push('    password: "' + esc(adminPassword) + '",');
+  L.push("  },");
+
+  // SEO
+  L.push("  seo: {");
+  L.push('    metaTitleAccueil: "' + esc(metaTitleAccueil) + '",');
+  L.push('    metaDescAccueil: "' + esc(metaDescAccueil) + '",');
+  L.push('    descriptionEntreprise: "' + esc(descriptionEntreprise) + '",');
+  L.push('    slogan: "' + esc(slogan) + '",');
+  L.push("  },");
+
+  L.push("} as const;");
+  L.push("");
+  L.push("export type ClientConfig = typeof clientConfig;");
+  L.push("");
+
+  return L.join("\n");
+}
+
+// ---------------------------------------------------------------------------
+// Main
+// ---------------------------------------------------------------------------
+
+function main() {
+  if (!existsSync(CLIENT_MD)) {
+    console.warn("CLIENT.md introuvable - build avec config par defaut.");
+    writeFileSync(OUTPUT, generateDefaultConfig(), "utf-8");
+    console.log("client.config.ts genere avec valeurs par defaut -> " + OUTPUT);
+    process.exit(0);
+  }
+
+  const content = readFileSync(CLIENT_MD, "utf-8");
+  const lines = content.split(/\r?\n/);
+
+  const vars = new Map<string, string>();
+
+  for (const line of lines) {
+    const trimmed = line.trim();
+    if (!trimmed || trimmed.startsWith("#")) continue;
+
+    const match = trimmed.match(/^([A-Z_0-9]+):\s*"(.*)"$/);
+    if (match) {
+      vars.set(match[1], match[2]);
+    }
+  }
+
+  console.log("\u2713 CLIENT.md lu (" + vars.size + " variables)");
+
+  const output = generateConfig(vars);
   writeFileSync(OUTPUT, output, "utf-8");
-  console.log(`\u2713 client.config.ts g\u00e9n\u00e9r\u00e9 -> ${OUTPUT}`);
+  console.log("\u2713 client.config.ts genere -> " + OUTPUT);
 
   // --- Patch static files with template variables --------------------------
+  const get = (key: string) => vars.get(key) ?? "";
+  const communesRaw = get("COMMUNES");
+  const communes = communesRaw ? communesRaw.split("|").map(parseCommune) : [];
+
   patchStaticFiles(ROOT, {
-    "{VILLE}": ville,
+    "{VILLE}": get("VILLE"),
     "{COMMUNE_1}": communes[0]?.name ?? "",
     "{COMMUNE_2}": communes[1]?.name ?? "",
     "{COMMUNE_3}": communes[2]?.name ?? "",
-    "{ZONE_KM}": zoneKm,
-    "{NOM_ENTREPRISE}": nomEntreprise,
-    "{DISPONIBILITE}": disponibilite,
+    "{ZONE_KM}": get("ZONE_KM"),
+    "{NOM_ENTREPRISE}": get("NOM_ENTREPRISE"),
+    "{DISPONIBILITE}": get("DISPONIBILITE"),
   });
 }
 
