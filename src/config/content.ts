@@ -44,7 +44,7 @@ export const reassuranceBand = {
   stats: [
     { value: clientConfig.chiffres.anneesExperience, suffix: "+", label: "Années d'expérience" },
     { value: clientConfig.chiffres.nombreInterventions, suffix: "+", label: "Interventions" },
-    { value: Number(clientConfig.chiffres.tauxSatisfaction), suffix: "%", label: "Clients satisfaits" },
+    { value: Number(clientConfig.chiffres.tauxSatisfaction) || 98, suffix: "%", label: "Clients satisfaits" },
     { value: 7, suffix: "j/7", label: "Disponibilité" },
   ],
 };
